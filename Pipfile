@@ -4,6 +4,11 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
+google-genai = "*"
+fastapi = "*"
+uvicorn = "*"
+python-multipart = "*"
+python-dotenv = "*"
 
 [dev-packages]
 
