@@ -1,5 +1,45 @@
-# .gitignore
+# --- Security / Secrets (CRITICAL) ---
 .env
+.env.local
+*.json  
+secrets/
+credentials/
+
+# --- Python ---
 __pycache__/
+*.py[cod]
+*$py.class
+*.manifest
+*.spec
+
+# --- Virtual Environments ---
+# Pipenv usually stores envs outside, but if you create one locally:
 .venv/
+venv/
+ENV/
+
+# --- Logs & Databases ---
+*.log
+*.sqlite
+db.sqlite3
+
+# --- IDEs / Editors ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- Operating System Junk ---
+.DS_Store        # Mac
+Thumbs.db        # Windows
+ehthumbs.db      # Windows
+
+# --- Testing / Coverage ---
+.coverage
+htmlcov/
 .pytest_cache/
+
+# --- Google Cloud ---
+# Ignore the local App Engine / Cloud Run build artifacts
+.cloudignore
+app.yaml         # Optional: Only ignore if it contains env vars
