@@ -10,6 +10,7 @@ uvicorn = "*"
 python-multipart = "*"
 python-dotenv = "*"
 pydantic-settings = "*"
+google-adk = "*"
 
 [dev-packages]
 
