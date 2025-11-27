@@ -9,6 +9,7 @@ fastapi = "*"
 uvicorn = "*"
 python-multipart = "*"
 python-dotenv = "*"
+pydantic-settings = "*"
 
 [dev-packages]
 
