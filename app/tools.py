@@ -22,8 +22,6 @@ def submit_diagnosis_report(
         disease_name: The specific disease if identified.
         is_severe: True if the disease is contagious/severe.
     """
-    # In a real app, you might save this to a database here.
-    # For now, we just return it so the Runner can pass it to the API.
     return {
         "plant_name": plant_name,
         "status": status,
