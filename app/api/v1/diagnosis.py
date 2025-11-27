@@ -27,22 +27,27 @@ async def analyze_crop(
         # 2. Get Diagnosis (The Agent)
         diagnosis = agronomist.diagnose_image(contents, file.content_type)
         
+        # 🛑 FIX: Check if AI failed to generate JSON
+        if diagnosis is None:
+            raise HTTPException(
+                status_code=500, 
+                detail="AI returned no data. It might have been blocked or failed to generate JSON."
+            )
+
         # 3. Run Audit (The Evaluator)
-        # We pass the raw dictionary of the diagnosis to the Sentinel
-        # Note: diagnosis is a Pydantic model, so we dump it to dict
         audit_result = await sentinel.audit_diagnosis(diagnosis)
         
         # 4. Check Safety
         if not audit_result.get("safe", False):
-            # OPTION A: Block completely
-            # raise HTTPException(status_code=400, detail=f"Safety Block: {audit_result.get('reason')}")
-            
-            # OPTION B (Better for User): Flag it in the response
-            # We override the local_advice with a warning
-            diagnosis['local_advice'] = f"⚠️ SENTINEL WARNING: {audit_result.get('reason')} - Please consult a human expert."
+            # We explicitly modify the dict here.
+            # Since diagnosis is not None (checked above), this will now work.
+            reason = audit_result.get("reason", "Unknown Safety Issue")
+            diagnosis['local_advice'] = f"⚠️ SENTINEL WARNING: {reason} - Please consult a human expert."
             diagnosis['sentinel_flag'] = True
 
         return diagnosis
 
     except Exception as e:
+        # Print the error to your terminal so you can see what happened
+        print(f"❌ API Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
