@@ -1,53 +1,57 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
-from app.services import AgronomistService, SentinelService
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
+from app.services import ManagerService
 from app.schemas import DiagnosisResult
 
 router = APIRouter()
 
-# Dependency Injection helpers
-def get_agronomist():
-    return AgronomistService()
-
-def get_sentinel():
-    return SentinelService()
+# Dependency Injection for the Manager
+def get_manager():
+    return ManagerService()
 
 @router.post("/analyze", response_model=DiagnosisResult)
 async def analyze_crop(
-    file: UploadFile = File(...),
-    agronomist: AgronomistService = Depends(get_agronomist),
-    sentinel: SentinelService = Depends(get_sentinel)
+    file: UploadFile = File(None),  # Optional: User might just ask a question
+    question: str = Form(None),     # Optional: User might just upload a photo
+    manager: ManagerService = Depends(get_manager)
 ):
-    # 1. Validate File
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File must be an image")
+    # 1. Input Validation
+    if not file and not question:
+        raise HTTPException(
+            status_code=400, 
+            detail="Please provide an image for diagnosis OR a question for advice."
+        )
+
+    # 2. Process File (if present)
+    image_bytes = None
+    mime_type = None
     
-    contents = await file.read()
+    if file:
+        if not file.content_type.startswith("image/"):
+            raise HTTPException(status_code=400, detail="File must be an image")
+        image_bytes = await file.read()
+        mime_type = file.content_type
     
     try:
-        # 2. Get Diagnosis (The Agent)
-        diagnosis = agronomist.diagnose_image(contents, file.content_type)
+        # 3. Delegate to Manager (Strict Mode Logic)
+        # The Manager decides: "Image? -> Diagnose" OR "No Image? -> Chat"
+        result = manager.process_request(
+            image_bytes=image_bytes, 
+            mime_type=mime_type, 
+            user_text=question
+        )
         
-        # 🛑 FIX: Check if AI failed to generate JSON
-        if diagnosis is None:
-            raise HTTPException(
+        if result is None:
+             raise HTTPException(
                 status_code=500, 
-                detail="AI returned no data. It might have been blocked or failed to generate JSON."
+                detail="System Error: The Agent failed to produce a result."
             )
-
-        # 3. Run Audit (The Evaluator)
-        audit_result = await sentinel.audit_diagnosis(diagnosis)
         
-        # 4. Check Safety
-        if not audit_result.get("safe", False):
-            # We explicitly modify the dict here.
-            # Since diagnosis is not None (checked above), this will now work.
-            reason = audit_result.get("reason", "Unknown Safety Issue")
-            diagnosis['local_advice'] = f"⚠️ SENTINEL WARNING: {reason} - Please consult a human expert."
-            diagnosis['sentinel_flag'] = True
-
-        return diagnosis
+        # 4. Handle Errors from the Manager
+        if result.get("error"):
+            raise HTTPException(status_code=400, detail=result["error"])
+            
+        return result
 
     except Exception as e:
-        # Print the error to your terminal so you can see what happened
         print(f"❌ API Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
