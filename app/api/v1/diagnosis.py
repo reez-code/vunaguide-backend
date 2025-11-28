@@ -1,3 +1,4 @@
+from typing import Union
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from app.services import ManagerService
 from app.schemas import DiagnosisResult
@@ -10,10 +11,15 @@ def get_manager():
 
 @router.post("/analyze", response_model=DiagnosisResult)
 async def analyze_crop(
-    file: UploadFile = File(None),  # Optional: User might just ask a question
-    question: str = Form(None),     # Optional: User might just upload a photo
+    # ✅ FIX: Allow 'str' type for file to handle empty strings sent by some clients
+    file: Union[UploadFile, str, None] = File(None),  
+    question: str = Form(None),
     manager: ManagerService = Depends(get_manager)
 ):
+    # ✅ FIX: Sanitize input. If file is a string (e.g. ""), treat it as None.
+    if isinstance(file, str):
+        file = None
+
     # 1. Input Validation
     if not file and not question:
         raise HTTPException(
@@ -33,8 +39,7 @@ async def analyze_crop(
     
     try:
         # 3. Delegate to Manager (Strict Mode Logic)
-        # The Manager decides: "Image? -> Diagnose" OR "No Image? -> Chat"
-        result = manager.process_request(
+        result = await manager.process_request(
             image_bytes=image_bytes, 
             mime_type=mime_type, 
             user_text=question

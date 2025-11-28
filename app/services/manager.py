@@ -1,28 +1,25 @@
+import os
 from google.adk.agents import Agent
 from google.adk.runners import Runner
-from google.adk.models.vertex_ai import VertexAIModel
+from google.adk.tools import google_search 
+from google.adk.sessions import InMemorySessionService
 from google.genai import types
+from google.adk.models.google_llm import Gemini
+
 from app.core import settings
 from app.services import AgronomistService, SentinelService
 
-# Native Google Search Tool (Only for text questions)
-google_search_tool = types.Tool(
-    google_search_retrieval=types.GoogleSearchRetrieval()
-)
-
 class ManagerService:
     def __init__(self):
-        # The Core Workers
         self.agronomist = AgronomistService()
         self.sentinel = SentinelService()
         
-        self.model = VertexAIModel(
-            model_name=settings.MODEL_ID,
-            project_id=settings.GOOGLE_CLOUD_PROJECT,
-            location=settings.LOCATION
-        )
+        os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "1"
+        os.environ["GOOGLE_CLOUD_PROJECT"] = settings.GOOGLE_CLOUD_PROJECT
+        os.environ["GOOGLE_CLOUD_LOCATION"] = settings.LOCATION
+        
+        self.model = Gemini(model=settings.MODEL_ID)
 
-        # The Chat Agent (Only used if NO image is uploaded)
         self.chat_agent = Agent(
             name="VunaGuideChat",
             model=self.model,
@@ -32,30 +29,20 @@ class ManagerService:
             Use Google Search to get real-time information.
             Keep answers short and practical for farmers.
             """,
-            tools=[google_search_tool]
+            tools=[google_search] 
         )
 
-    def process_request(self, image_bytes: bytes, mime_type: str, user_text: str = None) -> dict:
-        """
-        STRICT LOGIC FLOW:
-        1. Image Uploaded? -> RUN DIAGNOSIS PIPELINE (Core Feature).
-        2. No Image? -> RUN CHAT AGENT (Support Feature).
-        """
-        
-        # --- PATH A: CORE DIAGNOSIS (High Priority) ---
+    async def process_request(self, image_bytes: bytes, mime_type: str, user_text: str = None) -> dict:
+        # --- PATH A: CORE DIAGNOSIS ---
         if image_bytes:
             print("📸 Image detected. FORCING Diagnosis Pipeline.")
-            
-            # 1. Run Agronomist (Vision)
-            diagnosis = self.agronomist.diagnose_image(image_bytes, mime_type)
+            diagnosis = await self.agronomist.diagnose_image(image_bytes, mime_type)
             
             if not diagnosis:
                 return {"error": "Could not identify crop."}
 
-            # 2. Run Sentinel (Safety)
-            audit = self.sentinel.audit_diagnosis(diagnosis)
+            audit = await self.sentinel.audit_diagnosis(diagnosis)
             
-            # 3. Merge Results
             if not audit.get("safe", True):
                 reason = audit.get("reason", "Unknown Safety Issue")
                 diagnosis['local_advice'] = f"⚠️ SENTINEL WARNING: {reason}\n\n" + diagnosis.get("local_advice", "")
@@ -63,16 +50,52 @@ class ManagerService:
             
             return diagnosis
 
-        # --- PATH B: TEXT CHAT (Low Priority / Support) ---
+        # --- PATH B: TEXT CHAT ---
         if user_text:
             print("💬 No image. Switching to Chat/Search Mode.")
-            runner = Runner(agent=self.chat_agent)
-            result = runner.run(user_text)
             
+            session_service = InMemorySessionService()
+            runner = Runner(
+                agent=self.chat_agent, 
+                app_name="VunaGuide", 
+                session_service=session_service
+            )
+            
+            session = await session_service.create_session(app_name="VunaGuide", user_id="chat_user")
+            
+            user_message = types.Content(
+                role="user",
+                parts=[types.Part.from_text(text=user_text)]
+            )
+            
+            async for _ in runner.run_async(
+                user_id="chat_user",
+                session_id=session.id,
+                new_message=user_message
+            ):
+                pass
+            
+            session = await session_service.get_session(app_name="VunaGuide", session_id=session.id, user_id="chat_user")
+            final_text = ""
+            
+            # ✅ FIX: Use 'events' instead of 'history'
+            if session.events:
+                # We iterate backwards to find the last response from the model
+                for event in reversed(session.events):
+                    if event.content and event.content.parts:
+                        # Check if this event has text (ignore empty tool calls)
+                        has_text = False
+                        for part in event.content.parts:
+                            if part.text:
+                                final_text = part.text # Grab the text
+                                has_text = True
+                        if has_text:
+                            break # Found the last text response
+
             return {
                 "plant_name": "General Inquiry",
                 "status": "Chat",
-                "local_advice": result.text, # Contains Google Search answer
+                "local_advice": final_text,
                 "remedies": [],
                 "confidence_score": 100
             }

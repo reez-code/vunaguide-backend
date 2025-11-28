@@ -1,53 +1,81 @@
-import json
+import os
 from google.adk.agents import Agent
 from google.adk.runners import Runner
-from google.adk.models.vertex_ai import VertexAIModel
+from google.adk.sessions import InMemorySessionService
 from google.genai import types
+from google.adk.models.google_llm import Gemini
 from app.core import settings
-from app.tools import submit_diagnosis_report # Your submission tool structure
+from app.tools import submit_diagnosis_report
 
 class AgronomistService:
     def __init__(self):
-        self.model = VertexAIModel(
-            model_name=settings.MODEL_ID,
-            project_id=settings.GOOGLE_CLOUD_PROJECT,
-            location=settings.LOCATION
-        )
+        # Set Env Vars
+        os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "1"
+        os.environ["GOOGLE_CLOUD_PROJECT"] = settings.GOOGLE_CLOUD_PROJECT
+        os.environ["GOOGLE_CLOUD_LOCATION"] = settings.LOCATION
+        
+        self.model = Gemini(model=settings.MODEL_ID)
 
         self.agent = Agent(
             name="AgronomistWorker",
             model=self.model,
             instruction="""
-            Analyze the crop image.
+           Analyze the crop image.
             Identify disease, confidence, and remedies.
             Use 'submit_diagnosis_report' to structure your findings.
+            For 'local_advice', provide practical advice in simple English suitable for Kenyan farmers.
             """,
             tools=[submit_diagnosis_report]
         )
 
-    # This is the "Tool" function for the Root Agent
-    def diagnose_crop(self, image_bytes: bytes, mime_type: str) -> dict:
-        """
-        Performs visual diagnosis on a crop image.
-        """
-        runner = Runner(agent=self.agent)
+    async def diagnose_image(self, image_bytes: bytes, mime_type: str) -> dict:
+        session_service = InMemorySessionService()
+        runner = Runner(
+            agent=self.agent, 
+            app_name="VunaGuide", 
+            session_service=session_service
+        )
         
-        user_input = [
-            types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
-            "Analyze this crop and submit the report."
-        ]
+        session = await session_service.create_session(app_name="VunaGuide", user_id="agro_worker")
+        
+        print("🌿 Agronomist Agent running...")
         
         try:
-            print("🌿 Agronomist Agent running...")
-            result = runner.run(user_input)
+            user_input = types.Content(
+                role="user",
+                parts=[
+                    types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                    types.Part.from_text(text="Analyze this crop and submit the report.")
+                ]
+            )
+
+            async for _ in runner.run_async(
+                user_id="agro_worker",
+                session_id=session.id,
+                new_message=user_input
+            ):
+                pass
+
+            session = await session_service.get_session(
+                app_name="VunaGuide", 
+                session_id=session.id, 
+                user_id="agro_worker"
+            )
             
-            # Extract tool output from history
-            for turn in result.turns:
-                for part in turn.parts:
-                    if hasattr(part, "function_call") and part.function_call:
-                        if part.function_call.name == "submit_diagnosis_report":
-                            return dict(part.function_call.args)
+            # ✅ FIX: Use 'events' instead of 'history'
+            # Loop through all events to find the tool call
+            if session.events:
+                for event in session.events:
+                    if event.content and event.content.parts:
+                        for part in event.content.parts:
+                            # Check for function call
+                            if part.function_call and part.function_call.name == "submit_diagnosis_report":
+                                print("✅ Agronomist Tool Call Detected")
+                                return dict(part.function_call.args)
+            
+            print("⚠️ Agronomist failed to call tool.")
             return None
+            
         except Exception as e:
             print(f"❌ Agronomist Error: {e}")
             raise e
