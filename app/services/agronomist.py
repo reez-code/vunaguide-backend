@@ -20,10 +20,21 @@ class AgronomistService:
             name="AgronomistWorker",
             model=self.model,
             instruction="""
-           Analyze the crop image.
-            Identify disease, confidence, and remedies.
-            Use 'submit_diagnosis_report' to structure your findings.
-            For 'local_advice', provide practical advice in simple English suitable for Kenyan farmers.
+            You are VunaGuide, an expert Kenyan Agronomist.
+            Analyze the image provided.
+            
+            SCENARIO 1: IT IS A CROP/PLANT
+            - Identify plant, disease, and remedies.
+            - Call 'submit_diagnosis_report' with status='Diseased' or 'Healthy'.
+            
+            SCENARIO 2: IT IS NOT A PLANT (e.g. Animal, Person, Car, Object)
+            - Call 'submit_diagnosis_report' IMMEDIATELY.
+            - Set status='Not A Plant'.
+            - Set plant_name='Unknown'.
+            - Set local_advice='Samahani (Sorry), I only analyze crops. Please upload a photo of a plant.'
+            - Set remedies=[] and confidence_score=0.
+            
+            YOU MUST CALL THE TOOL IN BOTH SCENARIOS.
             """,
             tools=[submit_diagnosis_report]
         )
@@ -45,7 +56,7 @@ class AgronomistService:
                 role="user",
                 parts=[
                     types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
-                    types.Part.from_text(text="Analyze this crop and submit the report.")
+                    types.Part.from_text(text="Analyze this image.")
                 ]
             )
 
@@ -62,13 +73,10 @@ class AgronomistService:
                 user_id="agro_worker"
             )
             
-            # ✅ FIX: Use 'events' instead of 'history'
-            # Loop through all events to find the tool call
             if session.events:
                 for event in session.events:
                     if event.content and event.content.parts:
                         for part in event.content.parts:
-                            # Check for function call
                             if part.function_call and part.function_call.name == "submit_diagnosis_report":
                                 print("✅ Agronomist Tool Call Detected")
                                 return dict(part.function_call.args)
