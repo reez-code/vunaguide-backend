@@ -20,14 +20,17 @@ class ManagerService:
         
         self.model = Gemini(model=settings.MODEL_ID)
 
+        # ✅ FIX 1: Initialize SessionService once (Persist Memory)
+        self.session_service = InMemorySessionService()
+
         self.chat_agent = Agent(
             name="VunaGuideChat",
             model=self.model,
             instruction="""
-            You are VunaGuide, a helpful Kenyan Agricultural Assistant.
-            Answer questions about farming, seasons, and market prices.
-            Use Google Search to get real-time information.
-            Keep answers short and practical for farmers.
+            You are VunaGuide, a practical and reliable agricultural assistant.
+            Your role is to help farmers by providing clear, concise answers about farming practices, crop seasons, livestock care, and market prices.
+            Use Google Search whenever necessary to provide up-to-date and location-relevant information.
+            Keep all responses short, actionable, and easy to understand in English.
             """,
             tools=[google_search] 
         )
@@ -42,12 +45,10 @@ class ManagerService:
             if not diagnosis:
                 return {"error": "Could not identify crop. Please try a clearer photo."}
 
-            # ✅ FIX: Handle Non-Plant Images Gracefully
             if diagnosis.get("status") == "Not A Plant":
                 print("🚫 Non-plant detected. Skipping Sentinel.")
                 return diagnosis
 
-            # Only run Sentinel if it IS a plant
             audit = await self.sentinel.audit_diagnosis(diagnosis)
             
             if not audit.get("safe", True):
@@ -61,14 +62,28 @@ class ManagerService:
         if user_text:
             print("💬 No image. Switching to Chat/Search Mode.")
             
-            session_service = InMemorySessionService()
+            # ✅ FIX 2: Use the persistent session service
             runner = Runner(
                 agent=self.chat_agent, 
                 app_name="VunaGuide", 
-                session_service=session_service
+                session_service=self.session_service
             )
             
-            session = await session_service.create_session(app_name="VunaGuide", user_id="chat_user")
+            # ✅ FIX 3: Try to retrieve existing session (Context Memory)
+            session_id = "vuna_demo_chat"
+            session = await self.session_service.get_session(
+                app_name="VunaGuide", 
+                session_id=session_id, 
+                user_id="chat_user"
+            )
+            
+            # Create only if it doesn't exist
+            if not session:
+                session = await self.session_service.create_session(
+                    app_name="VunaGuide", 
+                    user_id="chat_user", 
+                    session_id=session_id
+                )
             
             user_message = types.Content(
                 role="user",
@@ -82,7 +97,13 @@ class ManagerService:
             ):
                 pass
             
-            session = await session_service.get_session(app_name="VunaGuide", session_id=session.id, user_id="chat_user")
+            # Retrieve updated history
+            session = await self.session_service.get_session(
+                app_name="VunaGuide", 
+                session_id=session.id, 
+                user_id="chat_user"
+            )
+            
             final_text = ""
             
             if session.events:

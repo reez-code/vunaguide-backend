@@ -9,7 +9,6 @@ from app.tools import submit_diagnosis_report
 
 class AgronomistService:
     def __init__(self):
-        # Set Env Vars
         os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "1"
         os.environ["GOOGLE_CLOUD_PROJECT"] = settings.GOOGLE_CLOUD_PROJECT
         os.environ["GOOGLE_CLOUD_LOCATION"] = settings.LOCATION
@@ -20,18 +19,19 @@ class AgronomistService:
             name="AgronomistWorker",
             model=self.model,
             instruction="""
-            You are VunaGuide, an expert Kenyan Agronomist.
+            You are VunaGuide, an expert Agronomist.
             Analyze the image provided.
             
             SCENARIO 1: IT IS A CROP/PLANT
             - Identify plant, disease, and remedies.
             - Call 'submit_diagnosis_report' with status='Diseased' or 'Healthy'.
+            - For 'local_advice', provide practical advice in clear English suitable for farmers.
             
             SCENARIO 2: IT IS NOT A PLANT (e.g. Animal, Person, Car, Object)
             - Call 'submit_diagnosis_report' IMMEDIATELY.
             - Set status='Not A Plant'.
             - Set plant_name='Unknown'.
-            - Set local_advice='Samahani (Sorry), I only analyze crops. Please upload a photo of a plant.'
+            - Set local_advice='Sorry, I only analyze crops. Please upload a photo of a plant.'
             - Set remedies=[] and confidence_score=0.
             
             YOU MUST CALL THE TOOL IN BOTH SCENARIOS.
