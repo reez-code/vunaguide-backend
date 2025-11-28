@@ -36,11 +36,18 @@ class ManagerService:
         # --- PATH A: CORE DIAGNOSIS ---
         if image_bytes:
             print("📸 Image detected. FORCING Diagnosis Pipeline.")
+            
             diagnosis = await self.agronomist.diagnose_image(image_bytes, mime_type)
             
             if not diagnosis:
-                return {"error": "Could not identify crop."}
+                return {"error": "Could not identify crop. Please try a clearer photo."}
 
+            # ✅ FIX: Handle Non-Plant Images Gracefully
+            if diagnosis.get("status") == "Not A Plant":
+                print("🚫 Non-plant detected. Skipping Sentinel.")
+                return diagnosis
+
+            # Only run Sentinel if it IS a plant
             audit = await self.sentinel.audit_diagnosis(diagnosis)
             
             if not audit.get("safe", True):
@@ -78,19 +85,16 @@ class ManagerService:
             session = await session_service.get_session(app_name="VunaGuide", session_id=session.id, user_id="chat_user")
             final_text = ""
             
-            # ✅ FIX: Use 'events' instead of 'history'
             if session.events:
-                # We iterate backwards to find the last response from the model
                 for event in reversed(session.events):
                     if event.content and event.content.parts:
-                        # Check if this event has text (ignore empty tool calls)
                         has_text = False
                         for part in event.content.parts:
                             if part.text:
-                                final_text = part.text # Grab the text
+                                final_text = part.text
                                 has_text = True
                         if has_text:
-                            break # Found the last text response
+                            break
 
             return {
                 "plant_name": "General Inquiry",
