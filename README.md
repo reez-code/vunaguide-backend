@@ -18,6 +18,7 @@
 - [Architecture](#-architecture)
 - [Tech Stack](#-tech-stack)
 - [Setup Guide](#-setup-guide)
+- [Deployment](#-deployment)
 - [Testing the API](#-testing-the-api)
 - [License](#-license)
 
@@ -90,7 +91,7 @@ pipenv shell
 
 ### 3. Environment Configuration
 
-Create a `.env` file in the root directory to configure your Google Cloud connection:
+Create a `.env` file in the root directory:
 
 ```env
 # Your Google Cloud Project ID
@@ -115,14 +116,60 @@ The API will be available at: **http://127.0.0.1:8000**
 
 ---
 
+## ☁️ Deployment
+
+### Google Cloud Run
+
+This project includes a `Procfile` and `requirements.txt` for seamless deployment on Google Cloud Run.
+
+#### Deploy to Cloud Run
+
+```bash
+gcloud run deploy vunaguide-backend \
+  --source . \
+  --project YOUR_PROJECT_ID \
+  --region us-central1 \
+  --allow-unauthenticated
+```
+
+#### Set Environment Variables
+
+After deployment, configure the required environment variables:
+
+```bash
+gcloud run services update vunaguide-backend \
+  --set-env-vars GOOGLE_CLOUD_PROJECT=your-project-id \
+  --set-env-vars LOCATION=us-central1 \
+  --set-env-vars MODEL_ID=gemini-2.5-flash \
+  --region us-central1
+```
+
+> **Note**: For production deployments, consider using `--no-allow-unauthenticated` and implementing proper authentication.
+
+---
+
 ## 🧪 Testing the API
 
 You can test the agent logic directly via the Swagger UI:
 
-1. Go to **http://127.0.0.1:8000/docs**
+1. Navigate to **http://127.0.0.1:8000/docs**
 2. Use the **POST /api/v1/analyze** endpoint:
    - **Image**: Upload a crop photo to test the Agronomist + Sentinel pipeline.
    - **Question**: Type "Maize prices?" to test the Google Search grounding.
+
+### Example cURL Request
+
+```bash
+# Text-only query
+curl -X POST "http://127.0.0.1:8000/api/v1/analyze" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What are the best fertilizers for maize?"}'
+
+# Image upload
+curl -X POST "http://127.0.0.1:8000/api/v1/analyze" \
+  -F "image=@/path/to/crop-image.jpg" \
+  -F "question=What disease does this plant have?"
+```
 
 ---
 
