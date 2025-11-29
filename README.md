@@ -6,9 +6,20 @@
 
 <p align="center">
   <a href="https://github.com/reez-code/vunaguide-frontend">View Frontend Repository</a> · 
-  <a href="https://github.com/reez-code/vunaguide-backend/issues/new?labels=bug">Report Bug</a> · 
-  <a href="https://github.com/reez-code/vunaguide-backend/issues/new?labels=enhancement">Request Feature</a>
+  <a href="https://github.com/reez-code/vunaguide-backend/issues/new?labels=bug">Report Bug</a>
 </p>
+
+---
+
+## 📚 Project Deliverables
+
+Quick links to the Capstone Project submission materials:
+
+| Document                   | Link                                                                                                                       |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| 📄 **Project Proposal**    | [View Google Doc](https://docs.google.com/document/d/1tAN6yM6T1TUdohKAtnYYygQ1C1xdmsVFu4c41qNPaJk/edit?usp=sharing)        |
+| 🎥 **Demo Video**          | [Watch on Drive](https://drive.google.com/file/d/1-iOYKEFad-1yk5PLdJtbiNXA2myn8ocV/view?usp=sharing)                       |
+| 📽️ **Presentation Slides** | [View Google Slides](https://docs.google.com/presentation/d/1qI59H0HEXb11qoDk-birVToY1getH9qA6wd5CQzIwaI/edit?usp=sharing) |
 
 ---
 
@@ -156,20 +167,6 @@ You can test the agent logic directly via the Swagger UI:
 2. Use the **POST /api/v1/analyze** endpoint:
    - **Image**: Upload a crop photo to test the Agronomist + Sentinel pipeline.
    - **Question**: Type "Maize prices?" to test the Google Search grounding.
-
-### Example cURL Request
-
-```bash
-# Text-only query
-curl -X POST "http://127.0.0.1:8000/api/v1/analyze" \
-  -H "Content-Type: application/json" \
-  -d '{"question": "What are the best fertilizers for maize?"}'
-
-# Image upload
-curl -X POST "http://127.0.0.1:8000/api/v1/analyze" \
-  -F "image=@/path/to/crop-image.jpg" \
-  -F "question=What disease does this plant have?"
-```
 
 ---
 
